@@ -6,19 +6,27 @@ from pydub import AudioSegment
 import os
 
 out = "output"
+allTime = 0
 
 def exportarAudio(a,b):
     a.export(b, format="mp3")
     
 
-def ejecutarWhisper(a,calidad,idioma):
-    comando = 'whisper '+a+' --output_dir '+out+' --output_format srt --language '+idioma+' --task translate --model '+calidad+' --device cuda'
-    print(comando)
-    inicio = time.time()
-    os.system(comando)
-    fin = time.time()
-    duracion = fin - inicio
-    print("El proceso tardo ", str(duracion/60), " minutos.")
+def ejecutarWhisper(pathMP3,calidad,idioma):
+    filenameWithExtension = os.path.basename(pathMP3)
+    filenameSplit = os.path.splitext(filenameWithExtension)[0]
+    futureSTR = out + "/" + filenameSplit + ".srt"
+    if not os.path.exists(futureSTR):
+        comando = 'whisper '+pathMP3+' --output_dir '+out+' --output_format srt --language '+idioma+' --task translate --model '+calidad+' --device cuda'
+        print(comando)
+        inicio = time.time()
+        os.system(comando)
+        fin = time.time()
+        duracion = fin - inicio
+        allTime += duracion/60
+        print("El proceso tardo ", str(duracion/60), " minutos.")
+    else:
+        print("Fase Whisper -> Ya existe: "+futureSTR+" se omite.")
 
 def joinSubtitule(segment_duration,filenameSplit):
     #unificamos los subtitulos
@@ -93,26 +101,36 @@ listaAudios = []
 filenameWithExtension = os.path.basename(filename)
 filenameSplit = os.path.splitext(filenameWithExtension)[0]
 
-if(all_exec or onlyWhisper):
+if(all_exec):
+    print("--- Begin Phase Split Audio ---")
     with concurrent.futures.ThreadPoolExecutor() as ejecutor:
         # Guardar cada segmento en un archivo separado
         for i, segment in enumerate(segments):
-            # Construir el nombre del archivo de salida
             output_filename = out+"/"+filenameSplit+"-"+str(i)+".mp3"
+            if not os.path.exists(output_filename):
+            # Construir el nombre del archivo de salida
+                ejecutor.submit(exportarAudio,segment,output_filename)
+            else:
+                print("Fase dividir audios -> Ya existe: "+output_filename + "se omite.")
             listaAudios.append(output_filename)
-            ejecutor.submit(exportarAudio,segment,output_filename)
+    print("--- End Phase ---")
 else:
     print("No se ejecuta fase dividir audios")
 
 if(all_exec or onlyWhisper):
+    print("--- Begin Phase Transcription ---")
 #Ejecutamos whisper
     for subAudio in listaAudios:
         #ejecutor.submit(ejecutarWhisper,subAudio,calidad,idioma)
         ejecutarWhisper(subAudio,calidad,idioma)
+    print(" El tiempo total de transcripcion es:" + allTime)
+    print("--- End Phase ---")
 else:
     print("No se ejecuta fase whisper")
 
 if(all_exec or onlySubtitule):
+    print("--- Begin Phase Union Transcriptions ---")
     joinSubtitule(segment_duration,filenameSplit)
+    print("--- End Phase ---")
 else:
     print("No se ejecuta fase subtitulos")

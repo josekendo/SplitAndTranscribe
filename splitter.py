@@ -13,6 +13,7 @@ def exportarAudio(a,b):
     
 
 def ejecutarWhisper(pathMP3,calidad,idioma):
+    global allTime 
     filenameWithExtension = os.path.basename(pathMP3)
     filenameSplit = os.path.splitext(filenameWithExtension)[0]
     futureSTR = out + "/" + filenameSplit + ".srt"

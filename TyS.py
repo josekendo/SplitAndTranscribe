@@ -7,10 +7,15 @@ import os
 
 out = "output"
 allTime = 0
+listOfDelete = []
+
+def extract_number(file_name):
+    fileName = file_name.split("-")[-1]
+    fileName = fileName.replace(".srt","")
+    return int(fileName)
 
 def exportarAudio(a,b):
     a.export(b, format="mp3")
-    
 
 def ejecutarWhisper(pathMP3,calidad,idioma):
     global allTime 
@@ -18,7 +23,7 @@ def ejecutarWhisper(pathMP3,calidad,idioma):
     filenameSplit = os.path.splitext(filenameWithExtension)[0]
     futureSTR = out + "/" + filenameSplit + ".srt"
     if not os.path.exists(futureSTR):
-        comando = 'whisper '+pathMP3+' --output_dir '+out+' --output_format srt --language '+idioma+' --task translate --model '+calidad+' --device cuda'
+        comando = 'whisper \"'+pathMP3+'\" --output_dir '+out+' --output_format srt --language '+idioma+' --task translate --model '+calidad+' --device cuda'
         print(comando)
         inicio = time.time()
         os.system(comando)
@@ -32,17 +37,24 @@ def ejecutarWhisper(pathMP3,calidad,idioma):
 def joinSubtitule(segment_duration,filenameSplit):
     #unificamos los subtitulos
     lista_subtitulos = [os.path.join(out, f) for f in os.listdir(out) if f.endswith('.srt')]
+    lista_subtitulos = sorted(lista_subtitulos, key=extract_number)
     subtitulos_unificados = pysrt.SubRipFile()
     tiempo_inicio = 0
     numero_inicio = 1
+    anterior = ""
     for sub in lista_subtitulos:
         subtitulos = pysrt.open(sub)
+        print("Uniendo -> "+sub)
         for subtitulo in subtitulos:
-            subtitulo.index = numero_inicio
-            subtitulo.start.milliseconds  += tiempo_inicio
-            subtitulo.end.milliseconds  += tiempo_inicio
-            subtitulos_unificados.append(subtitulo)
-            numero_inicio += 1
+            texto = str(subtitulo.text)
+            texto = texto.lower()
+            if not texto in listOfDelete and not anterior.lower() == texto:
+                subtitulo.index = numero_inicio
+                subtitulo.start.milliseconds  += tiempo_inicio
+                subtitulo.end.milliseconds  += tiempo_inicio
+                subtitulos_unificados.append(subtitulo)
+                numero_inicio += 1
+                anterior = subtitulo.text
         tiempo_inicio += segment_duration
 
     ruta_archivo_unificado = os.path.join(out, filenameSplit+'.srt')
@@ -59,6 +71,7 @@ parser.add_argument('-fw',type=str,help="Traduce solo el audio pasado.")
 parser.add_argument('-fs',type=str,help="Fase union de subtitulos.")  
 parser.add_argument('-fc',type=str,help="Fase corte audio.")  
 parser.add_argument('-out',type=str,help="out directory.")  
+parser.add_argument('-dic',type=str,help="dictionary for delete.")
 
 # Obtener los argumentos de línea de comandos
 args = parser.parse_args()
@@ -99,6 +112,12 @@ segments = audio[::segment_duration]
 
 listaAudios = []
 
+if(str(args.dic) != "None"):
+    with open(str(args.dic), 'r') as file:
+        listOfDelete = [line.strip() for line in file]
+        listOfDelete = [s.lower() for s in listOfDelete]
+    print("Load dictionary for delete ocurrences.")
+
 filenameWithExtension = os.path.basename(filename)
 filenameSplit = os.path.splitext(filenameWithExtension)[0]
 
@@ -124,7 +143,7 @@ if(all_exec or onlyWhisper):
     for subAudio in listaAudios:
         #ejecutor.submit(ejecutarWhisper,subAudio,calidad,idioma)
         ejecutarWhisper(subAudio,calidad,idioma)
-    print(" El tiempo total de transcripcion es:" + allTime)
+    print(" El tiempo total de transcripcion es:" + str(allTime))
     print("--- End Phase ---")
 else:
     print("No se ejecuta fase whisper")

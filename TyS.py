@@ -2,12 +2,15 @@ import argparse
 import pysrt
 import time
 import concurrent.futures
+import multiprocessing
 from pydub import AudioSegment
 import os
 
 out = "output"
 allTime = 0
 listOfDelete = []
+device = "cuda"
+haveWait = 0
 
 def extract_number(file_name):
     fileName = file_name.split("-")[-1]
@@ -22,8 +25,12 @@ def ejecutarWhisper(pathMP3,calidad,idioma):
     filenameWithExtension = os.path.basename(pathMP3)
     filenameSplit = os.path.splitext(filenameWithExtension)[0]
     futureSTR = out + "/" + filenameSplit + ".srt"
+    num_nucleos = multiprocessing.cpu_count()
     if not os.path.exists(futureSTR):
-        comando = 'whisper \"'+pathMP3+'\" --output_dir '+out+' --output_format srt --language '+idioma+' --task translate --model '+calidad+' --device cuda'
+        #--condition_on_previous_text False --word_timestamps True --max_line_width 34
+        comando = 'whisper \"'+pathMP3+'\" --output_dir '+out+' --output_format srt --language '+idioma+' --task translate --model '+calidad+' --device '+device+' --condition_on_previous_text False'
+        if num_nucleos > 1:
+            comando += ' --threads '+str(num_nucleos)
         print(comando)
         inicio = time.time()
         os.system(comando)
@@ -31,6 +38,9 @@ def ejecutarWhisper(pathMP3,calidad,idioma):
         duracion = fin - inicio
         allTime += duracion/60
         print("El proceso tardo ", str(duracion/60), " minutos.")
+        print("INICIO ESPERA")
+        time.sleep(haveWait)
+        print("FINAL ESPERA")
     else:
         print("Fase Whisper -> Ya existe: "+futureSTR+" se omite.")
 
@@ -72,6 +82,8 @@ parser.add_argument('-fs',type=str,help="Fase union de subtitulos.")
 parser.add_argument('-fc',type=str,help="Fase corte audio.")  
 parser.add_argument('-out',type=str,help="out directory.")  
 parser.add_argument('-dic',type=str,help="dictionary for delete.")
+parser.add_argument('-dev',type=str,help="device: cpu,cuda,amd.")
+parser.add_argument('-wait',type=int,help="time of wait between files of transcription.")
 
 # Obtener los argumentos de línea de comandos
 args = parser.parse_args()
@@ -86,7 +98,9 @@ calidad = args.calidad
 idioma = args.idioma
 fase_whisper = args.fw 
 fase_subs = args.fs
+fase_wait = args.wait
 
+#check options comand
 if str(fase_whisper) != "None":
     onlyWhisper = True
 
@@ -95,6 +109,13 @@ if str(fase_subs) != "None":
 
 if str(args.out) != "None":
     out = args.out
+
+if str(args.dev) != "None":
+    device = str(args.dev)
+
+if str(fase_wait) != "None":
+    haveWait = fase_wait
+
 
 all_exec = onlyWhisper == False and onlySubtitule == False
 

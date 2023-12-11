@@ -1,0 +1,1 @@
+python TyS.py "sound.mp3" 6 medium.en English -dic no.dic -out sound -wait 20
